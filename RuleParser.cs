@@ -38,7 +38,7 @@ namespace RulesProcessing
 
             while((char)pointer != 0)
             {
-                var index = ((string)pointer).IndexOf("(defrule", StringComparison.Ordinal);
+                var index = ((string)pointer).IndexOf("(defrule ", StringComparison.Ordinal);
                 if( index == -1)
                 {
                     throw new InvalidDataException("defrule is missing");
@@ -60,12 +60,7 @@ namespace RulesProcessing
                 pointer = SkipWhiteSpace((string)pointer);
                 pointer = ParseAntecedant((string)pointer, r);
 
-                if (string.IsNullOrEmpty((string)pointer))
-                {
-                    throw new InvalidDataException("failed to parse antecedant");
-                }
-
-                if (((string) pointer).Substring(0, 2) != "=>")
+                if (string.IsNullOrEmpty((string)pointer) || ((string)pointer).Substring(0, 2) != "=>")
                 {
                     throw new InvalidDataException("missing '=>'");
                 }
@@ -193,6 +188,27 @@ namespace RulesProcessing
             }
 
             return block;
+        }
+
+        private static StringPointer SkipComment(string fileData)
+        {
+            // eat everything until eof or next */ found
+            var sp = new StringPointer(fileData);
+            while(true)
+            {
+                var ch = (char) sp;
+
+                if( ch == '*' && (char)(sp.Increment(1)) == '/')
+                {
+                    return sp;
+                }
+
+                // we have an unclosed comment - should we throw an execption?
+                if (string.IsNullOrEmpty((string)sp))
+                    break;
+            }
+
+            return sp;
         }
 
         public IEnumerator<Rule> GetEnumerator()
