@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using RulesProcessing;
 
 namespace RuleSystem
 {
@@ -35,12 +34,11 @@ namespace RuleSystem
 
         public void Interpret()
         {
-            for (int ruleIndex = 0; ruleIndex < _ruleSet.Count; ruleIndex++ )
+#pragma warning disable 168
+            foreach (var t in _ruleSet.Where(t => t.IsActive).Where(CheckRule))
+#pragma warning restore 168
             {
-                if (!_ruleSet[ruleIndex].IsActive) continue;
-
-                // if rule modified memory we exit loop
-                if (CheckRule(_ruleSet[ruleIndex])) break;
+                break;
             }
         }
 
@@ -53,10 +51,9 @@ namespace RuleSystem
         private bool FireRule(Rule rule, string arg)
         {
             var retval = false;
-            var walker = rule.Consequent;
 
             var newCons = string.Empty;
-            while (walker != null)
+            foreach(var walker in rule.Consequents)
             {
                 var terms = GetTerms(walker.Element);
                 switch (terms[0])
@@ -84,7 +81,6 @@ namespace RuleSystem
                         break;
                 }
 
-                walker = walker.Next;
             }
 
             return retval;
@@ -92,14 +88,12 @@ namespace RuleSystem
 
         private bool CheckPattern(Rule rule, ref string arg)
         {
-            var ret = false;
-            var antecedent = rule.Antecedent;
-            MemoryElement chain = null;
+            var found = false;
 
-            while (antecedent != null)
+            var chain = new Stack<MemoryElement>();
+
+            foreach (var terms in rule.Antecedents.Select(antecedent => GetTerms(antecedent.Element)))
             {
-                var terms = GetTerms(antecedent.Element);
-
                 if (string.IsNullOrEmpty(terms[1]))
                 {
                     throw new InvalidOperationException("Argument can't be null!");
@@ -108,37 +102,15 @@ namespace RuleSystem
                 /* If the antecedent element is variable, find the matches
                  * in the working memory and store the matched terms.
                 */
-                if (terms[1][0] == '?')
+                if (terms[1][0] != '?') continue;
+                for (var i = 0; i < _memoryStore.Length; i++)
                 {
-                    for (var i = 0; i < _memoryStore.Length; i++)
-                    {
-                        if (!_memoryStore[i].IsActive) continue;
-                        var wmTerms = GetTerms(_memoryStore[i].Element);
-                        if (terms[0].Equals(wmTerms[0]))
-                        {
-                            //AddToChain(wmTerms[1]);
-
-                            var newElement = new MemoryElement { Element = wmTerms[1] };
-                            if (chain == null)
-                            {
-                                chain = newElement;
-                            }
-                            else
-                            {
-                                // add to tail
-                                var walker = chain;
-                                while (walker.Next != null) walker = walker.Next;
-                                walker.Next = newElement;
-                            }
-
-                            newElement.Next = null;
-                        }
-                    }
+                    if (!_memoryStore[i].IsActive) continue;
+                    var wmTerms = GetTerms(_memoryStore[i].Element);
+                    if (!terms[0].Equals(wmTerms[0])) continue;
+                    var newElement = new MemoryElement { Element = wmTerms[1] };
+                    chain.Push(newElement);
                 }
-
-
-                antecedent = antecedent.Next;
-
             }
 
             /* Now that we have the replacement strings, walk through the rules trying
@@ -146,47 +118,44 @@ namespace RuleSystem
              */
             do
             {
-                var curRule = rule.Antecedent;
+                //var curRule = rule.Antecedent;
 
                 string[] terms = null;
-                while (curRule != null)
+                foreach(var curRule in rule.Antecedents)
                 {
                     terms = GetTerms(curRule.Element);
                     if (terms[0].IndexOf("(true", StringComparison.Ordinal) == 0)
                     {
-                        ret = true;
+                        found = true;
                         break;
                     }
 
-                    if ((terms[1][0] == '?') && (chain != null))
+                    if ((terms[1][0] == '?') && (chain.Count > 0))
                     {
-                        terms[1] = chain.Element;
+                        terms[1] = chain.Peek().Element;
                     }
 
-                    ret = SearchWorkingMemory(terms[0], terms[1]);
+                    found = SearchWorkingMemory(terms[0], terms[1]);
 
-                    if (!ret) break;
-
-                    curRule = curRule.Next;
+                    if (!found) break;
                 }
 
-                if (ret)
+                if (found)
                 {
                     /* Cleanup the replacement string chain */
                     arg = terms[1];
-                    chain = null;
+                    chain.Clear();
+                    break;
                 }
-                else
+
+                if(chain.Count > 0 )
                 {
-                    if (chain != null)
-                    {
-                        chain = chain.Next;
-                    }
+                    chain.Pop();
                 }
 
-            } while (chain != null);
+            } while (chain.Count > 0);
 
-            return ret;
+            return found;
         }
 
         public void ProcessTimers()
@@ -214,20 +183,16 @@ namespace RuleSystem
                 builder.AppendFormat("Rule {0} :\n", rule.RuleName);
                 builder.Append("Antecedents : \n");
 
-                var mem = rule.Antecedent;
-                while (mem != null)
+                foreach(var mem in rule.Antecedents)
                 {
                     builder.AppendFormat("  {0}\n", mem.Element);
-                    mem = mem.Next;
                 }
 
                 builder.Append("Consequents : \n");
 
-                mem = rule.Consequent;
-                while (mem != null)
+                foreach(var mem in rule.Consequents)
                 {
                     builder.AppendFormat("  {0}\n", mem.Element);
-                    mem = mem.Next;
                 }
                 builder.Append("\n");
             }
@@ -262,7 +227,7 @@ namespace RuleSystem
             var parts = element.Split(' ');
             if( parts.Length == 3)
             {
-                string timer = parts[1];
+                var timer = parts[1];
 
                 if (timer[0] == '(')
                     timer = timer.Substring(1);

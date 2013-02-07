@@ -1,4 +1,4 @@
-﻿namespace RulesProcessing
+﻿namespace RuleSystem
 {
     public class Timer
     {

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
-namespace RulesProcessing
+namespace RuleSystem
 {
     public class RuleParser : IEnumerable<Rule>
     {
@@ -54,7 +54,7 @@ namespace RulesProcessing
                     pointer++;
                 }
 
-                var r = new Rule {RuleName = ruleNameBuilder.ToString()};
+                var r = new Rule {RuleName = ruleNameBuilder.ToString(), Antecedents = new List<MemoryElement>(), Consequents = new List<MemoryElement>()};
                 _rules.Add(r);
 
                 pointer = SkipWhiteSpace((string)pointer);
@@ -96,10 +96,10 @@ namespace RulesProcessing
                 block = SkipWhiteSpace((string)block);
                 if ((char) block != '(')
                     break;
-                
-                var me = rule.Consequent;
+
+                var me = new MemoryElement();
                 block = ParseElement((string) block, ref me);
-                rule.Consequent = me;
+                rule.Consequents.Add(me);
             }
 
             return block;
@@ -115,9 +115,9 @@ namespace RulesProcessing
                 if ((char) block != '(')
                     break;
                 
-                var me = rule.Antecedent;
+                var me = new MemoryElement();
                 block = ParseElement((string) block, ref me);
-                rule.Antecedent = me;
+                rule.Antecedents.Add(me);
             }
 
             return block;
@@ -125,6 +125,7 @@ namespace RulesProcessing
 
         private static StringPointer ParseElement(string fileData, ref MemoryElement me)
         {
+            if (me == null) throw new ArgumentNullException("me");
             var block = new StringPointer(fileData);
             var memoryElement = new MemoryElement();
 
@@ -153,16 +154,18 @@ namespace RulesProcessing
             //block++;
 
             memoryElement.Element = elementBuilder.ToString();
-            memoryElement.Next = null;
+            me = memoryElement;
 
-            if (me == null)
-                me = memoryElement;
-            else
-            {
-                var chain = me;
-                while (chain.Next != null) chain = chain.Next;
-                chain.Next = memoryElement;
-            }
+            //memoryElement.Next = null;
+
+            //if (me == null)
+            //    me = memoryElement;
+            //else
+            //{
+            //    var chain = me;
+            //    while (chain.Next != null) chain = chain.Next;
+            //    chain.Next = memoryElement;
+            //}
 
             return block;
         }
@@ -188,27 +191,6 @@ namespace RulesProcessing
             }
 
             return block;
-        }
-
-        private static StringPointer SkipComment(string fileData)
-        {
-            // eat everything until eof or next */ found
-            var sp = new StringPointer(fileData);
-            while(true)
-            {
-                var ch = (char) sp;
-
-                if( ch == '*' && (char)(sp.Increment(1)) == '/')
-                {
-                    return sp;
-                }
-
-                // we have an unclosed comment - should we throw an execption?
-                if (string.IsNullOrEmpty((string)sp))
-                    break;
-            }
-
-            return sp;
         }
 
         public IEnumerator<Rule> GetEnumerator()

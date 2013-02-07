@@ -1,4 +1,4 @@
-﻿namespace RulesProcessing
+﻿namespace RuleSystem
 {
     public class MemoryElement
     {
@@ -9,12 +9,6 @@
         }
 
         public string Element
-        {
-            get;
-            set;
-        }
-
-        public MemoryElement Next
         {
             get;
             set;
